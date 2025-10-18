@@ -1,0 +1,641 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = "postgresql://postgres:postgres@postgres/app"
+}
+
+// Enums
+enum ProductType {
+  DREAM_ANALYSIS
+  RITUAL_KIT
+  GUIDED_SESSION
+  RITUAL_PACK
+  INTERPRETATION_TEMPLATE
+  DIGITAL_CONTENT
+  PHYSICAL_KIT
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  PAST_DUE
+  EXPIRED
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+enum PrivacySetting {
+  PUBLIC
+  PRIVATE
+  ANONYMOUS
+  CIRCLE_ONLY
+}
+
+enum NotificationType {
+  REMINDER
+  ACHIEVEMENT
+  MARKETPLACE
+  CIRCLE
+  SYSTEM
+}
+
+enum QuestStatus {
+  ACTIVE
+  COMPLETED
+  EXPIRED
+}
+
+// Core Models
+model User {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+  username  String   @unique
+  
+  // Auth & profile
+  provider      String?  // 'google', 'discord', 'apple', etc.
+  providerId    String?
+  email         String?  @unique
+  
+  // Contributor fields
+  isContributor Boolean  @default(false)
+  payoutDetails Json?    // Stripe/payment account info
+  
+  // Onboarding
+  onboardingStep Int     @default(0)
+  
+  dreams              Dream[]
+  patterns            Pattern[]
+  circleMembers       DreamCircleMember[]
+  subscriptions       UserSubscription[]
+  orders              Order[]
+  reviews             Review[]
+  rituals             UserRitual[]
+  ritualEntries       RitualEntry[]
+  streaks             Streak[]
+  achievements        UserAchievement[]
+  quests              UserQuest[]
+  comments            Comment[]
+  notifications       Notification[]
+  profile             UserProfile?
+  royalties           Royalty[]
+  invoices            Invoice[]
+  sentMessages        Message[]          @relation("SentMessages")
+  receivedMessages    Message[]          @relation("ReceivedMessages")
+  auditLogs           AuditLog[]
+  circleInvites       CircleInvite[]
+  circlePosts         CirclePost[]
+  circlePostComments  CirclePostComment[]
+}
+
+model Dream {
+  id         Int      @id @default(autoincrement())
+  createdAt  DateTime @default(now())
+  recordedAt DateTime
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  title      String
+  content    String   @db.Text
+  voiceUrl   String?
+  mood       String?
+  energy     Int?     // 1-10 scale
+  
+  // Privacy control
+  privacySetting PrivacySetting @default(PRIVATE)
+  
+  symbols    Symbol[]
+  insights   Insight[]
+  sharedIn   DreamCircleShare[]
+  comments   Comment[]
+}
+
+model Symbol {
+  id           Int      @id @default(autoincrement())
+  dreamId      Int
+  dream        Dream    @relation(fields: [dreamId], references: [id], onDelete: Cascade)
+  
+  symbolText   String
+  archetypeId  Int?
+  archetype    Archetype? @relation(fields: [archetypeId], references: [id])
+  culturalTags String[]  // Array of cultural tradition tags
+  
+  patterns     PatternSymbol[]
+}
+
+model Archetype {
+  id               Int      @id @default(autoincrement())
+  name             String   @unique
+  jungianType      String?  // e.g., "Shadow", "Anima", "Hero"
+  description      String   @db.Text
+  culturalVariants Json     // JSON object with cultural interpretations
+  imageUrl         String?
+  
+  symbols          Symbol[]
+}
+
+model CulturalLens {
+  id             Int      @id @default(autoincrement())
+  tradition      String   @unique // e.g., "Yoruba", "Chinese", "Jungian"
+  region         String
+  beliefs        String   @db.Text
+  symbolMeanings Json     // JSON object mapping symbols to meanings
+  color          String?  // Hex color for UI theming
+  icon           String?  // Icon identifier
+}
+
+model Pattern {
+  id             Int      @id @default(autoincrement())
+  createdAt      DateTime @default(now())
+  userId         Int
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  name           String
+  frequency      Int      // How many times detected
+  interpretation String   @db.Text
+  aiGenerated    Boolean  @default(true)
+  
+  symbols        PatternSymbol[]
+}
+
+model PatternSymbol {
+  id        Int     @id @default(autoincrement())
+  patternId Int
+  pattern   Pattern @relation(fields: [patternId], references: [id], onDelete: Cascade)
+  symbolId  Int
+  symbol    Symbol  @relation(fields: [symbolId], references: [id], onDelete: Cascade)
+  
+  @@unique([patternId, symbolId])
+}
+
+model DreamCircle {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+  name      String
+  
+  members   DreamCircleMember[]
+  dreams    DreamCircleShare[]
+  invites   CircleInvite[]
+  posts     CirclePost[]
+}
+
+model DreamCircleMember {
+  id       Int         @id @default(autoincrement())
+  circleId Int
+  circle   DreamCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  userId   Int
+  user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role     String      @default("member") // "member", "elder", "mentor"
+  
+  @@unique([circleId, userId])
+}
+
+model DreamCircleShare {
+  id       Int         @id @default(autoincrement())
+  circleId Int
+  circle   DreamCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  dreamId  Int
+  dream    Dream       @relation(fields: [dreamId], references: [id], onDelete: Cascade)
+  sharedAt DateTime    @default(now())
+  
+  @@unique([circleId, dreamId])
+}
+
+model CircleInvite {
+  id          Int         @id @default(autoincrement())
+  createdAt   DateTime    @default(now())
+  code        String      @unique
+  circleId    Int
+  circle      DreamCircle @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  createdById Int
+  createdBy   User        @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  expiresAt   DateTime
+  maxUses     Int?
+  currentUses Int         @default(0)
+  
+  @@index([circleId])
+}
+
+model CirclePost {
+  id        Int                 @id @default(autoincrement())
+  createdAt DateTime            @default(now())
+  circleId  Int
+  circle    DreamCircle         @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  userId    Int
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String?
+  content   String              @db.Text
+  comments  CirclePostComment[]
+  
+  @@index([circleId])
+}
+
+model CirclePostComment {
+  id        Int        @id @default(autoincrement())
+  createdAt DateTime   @default(now())
+  postId    Int
+  post      CirclePost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    Int
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content   String     @db.Text
+  
+  @@index([postId])
+}
+
+model Insight {
+  id             Int      @id @default(autoincrement())
+  createdAt      DateTime @default(now())
+  dreamId        Int
+  dream          Dream    @relation(fields: [dreamId], references: [id], onDelete: Cascade)
+  
+  aiGenerated    Boolean  @default(false)
+  content        String   @db.Text
+  culturalLens   String?  // Which tradition this interpretation comes from
+  userNotes      String?  @db.Text
+  mentorComments String?  @db.Text
+}
+
+// Monetization Models
+model Product {
+  id          Int         @id @default(autoincrement())
+  createdAt   DateTime    @default(now())
+  name        String
+  description String      @db.Text
+  price       Decimal     @db.Decimal(10, 2)
+  type        ProductType
+  
+  // Digital content
+  downloadUrl String?
+  contentId   String?
+  
+  // Physical products
+  stock       Int?
+  weight      Decimal?    @db.Decimal(10, 2)
+  dimensions  Json?       // {length, width, height}
+  
+  // Stripe/Gumroad integration
+  stripeProductId  String?  @unique
+  gumroadProductId String?  @unique
+  
+  // Creator/contributor
+  creatorId   Int?
+  
+  // Metadata
+  averageRating Decimal?  @db.Decimal(3, 2)
+  popularityScore Int     @default(0)
+  
+  orders      OrderItem[]
+  reviews     Review[]
+  royalties   Royalty[]
+}
+
+model SubscriptionPlan {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String   @db.Text
+  price       Decimal  @db.Decimal(10, 2)
+  interval    String   // 'month', 'year'
+  features    Json     // Array of feature descriptions
+  
+  stripeProductId String? @unique
+  stripePriceId   String? @unique
+  
+  subscriptions UserSubscription[]
+}
+
+model UserSubscription {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId    Int
+  plan      SubscriptionPlan @relation(fields: [planId], references: [id])
+  
+  status    SubscriptionStatus
+  startDate DateTime @default(now())
+  endDate   DateTime?
+  
+  stripeSubscriptionId String? @unique
+  
+  @@index([userId, status])
+}
+
+model Order {
+  id        Int         @id @default(autoincrement())
+  createdAt DateTime    @default(now())
+  userId    Int
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  status    OrderStatus @default(PENDING)
+  total     Decimal     @db.Decimal(10, 2)
+  
+  // Shipping (for physical products)
+  shippingAddress Json?
+  shippingStatus  String?
+  trackingNumber  String?
+  
+  // Payment
+  stripePaymentIntentId String? @unique
+  
+  items       OrderItem[]
+  transaction Transaction?
+}
+
+model OrderItem {
+  id        Int     @id @default(autoincrement())
+  orderId   Int
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId Int
+  product   Product @relation(fields: [productId], references: [id])
+  
+  quantity  Int
+  price     Decimal @db.Decimal(10, 2)
+}
+
+model Transaction {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+  orderId   Int      @unique
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  
+  amount    Decimal  @db.Decimal(10, 2)
+  currency  String   @default("usd")
+  status    String   // 'pending', 'completed', 'failed', 'refunded'
+  
+  stripeChargeId String? @unique
+}
+
+model PromoCode {
+  id            Int      @id @default(autoincrement())
+  code          String   @unique
+  discountType  String   // 'percentage', 'fixed'
+  discountValue Decimal  @db.Decimal(10, 2)
+  expirationDate DateTime?
+  usageLimit    Int?
+  usageCount    Int      @default(0)
+  productId     Int?     // Optional: specific product only
+  
+  isActive      Boolean  @default(true)
+}
+
+model Review {
+  id        Int      @id @default(autoincrement())
+  createdAt DateTime @default(now())
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  rating    Int      // 1-5
+  comment   String?  @db.Text
+  
+  @@unique([productId, userId])
+}
+
+model Royalty {
+  id            Int      @id @default(autoincrement())
+  createdAt     DateTime @default(now())
+  contributorId Int
+  contributor   User     @relation(fields: [contributorId], references: [id], onDelete: Cascade)
+  productId     Int
+  product       Product  @relation(fields: [productId], references: [id])
+  
+  amount        Decimal  @db.Decimal(10, 2)
+  commissionRate Decimal @db.Decimal(5, 2) // Percentage
+  platformFee   Decimal  @db.Decimal(10, 2)
+  netPayout     Decimal  @db.Decimal(10, 2)
+  
+  payoutId      Int?
+  payout        Payout?  @relation(fields: [payoutId], references: [id])
+}
+
+model Payout {
+  id            Int      @id @default(autoincrement())
+  createdAt     DateTime @default(now())
+  contributorId Int
+  amount        Decimal  @db.Decimal(10, 2)
+  status        String   // 'pending', 'processing', 'completed', 'failed'
+  
+  stripePayoutId String? @unique
+  
+  royalties     Royalty[]
+}
+
+model Invoice {
+  id            Int      @id @default(autoincrement())
+  createdAt     DateTime @default(now())
+  contributorId Int
+  contributor   User     @relation(fields: [contributorId], references: [id], onDelete: Cascade)
+  
+  amount        Decimal  @db.Decimal(10, 2)
+  status        String   @default("draft") // 'draft', 'sent', 'paid'
+  invoiceUrl    String?
+  paidAt        DateTime?
+}
+
+// Ritual Models
+model Ritual {
+  id          Int      @id @default(autoincrement())
+  createdAt   DateTime @default(now())
+  name        String
+  description String   @db.Text
+  steps       Json     // Array of step descriptions
+  category    String?
+  
+  // Recommendation criteria
+  recommendedMoods Json?  // Array of mood strings
+  energyRange     Json?  // {min: number, max: number}
+  
+  // Sharing & marketplace
+  isPublic    Boolean  @default(false)
+  authorId    Int?
+  templateId  Int?     // If customized from a template
+  
+  userRituals   UserRitual[]
+  ritualEntries RitualEntry[]
+  reminders     RitualReminder[]
+}
+
+model UserRitual {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ritualId  Int
+  ritual    Ritual   @relation(fields: [ritualId], references: [id], onDelete: Cascade)
+  
+  isFavorite Boolean @default(false)
+  customNotes String? @db.Text
+  
+  @@unique([userId, ritualId])
+}
+
+model RitualEntry {
+  id              Int      @id @default(autoincrement())
+  createdAt       DateTime @default(now())
+  userId          Int
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ritualId        Int
+  ritual          Ritual   @relation(fields: [ritualId], references: [id])
+  
+  completedAt     DateTime @default(now())
+  effectivenessRating Int? // 1-10
+  notes           String?  @db.Text
+}
+
+model RitualReminder {
+  id              Int      @id @default(autoincrement())
+  userId          Int
+  ritualId        Int
+  ritual          Ritual   @relation(fields: [ritualId], references: [id], onDelete: Cascade)
+  
+  scheduledTime   DateTime
+  frequency       String?  // 'daily', 'weekly', 'custom'
+  triggerCondition Json?   // Complex trigger logic
+  isActive        Boolean  @default(true)
+}
+
+// Gamification Models
+model Streak {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type          String   // 'dream_logging', 'ritual_practice'
+  
+  currentLength Int      @default(0)
+  maxLength     Int      @default(0)
+  lastUpdated   DateTime @default(now())
+  
+  @@unique([userId, type])
+}
+
+model Achievement {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String   @db.Text
+  iconUrl     String?
+  criteria    Json     // Flexible criteria definition
+  category    String?  // 'milestone', 'engagement', 'social'
+  
+  users       UserAchievement[]
+}
+
+model UserAchievement {
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievementId Int
+  achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+  
+  earnedAt      DateTime @default(now())
+  
+  @@unique([userId, achievementId])
+}
+
+model Quest {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String   @db.Text
+  objective   Json     // Flexible criteria (e.g., {type: 'log_dreams', count: 7})
+  reward      Json?    // {type: 'badge', id: 123} or {type: 'points', amount: 50}
+  type        String   // 'daily', 'weekly', 'special'
+  
+  expiresAt   DateTime?
+  
+  users       UserQuest[]
+}
+
+model UserQuest {
+  id        Int         @id @default(autoincrement())
+  userId    Int
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questId   Int
+  quest     Quest       @relation(fields: [questId], references: [id], onDelete: Cascade)
+  
+  progress  Json        // Flexible progress tracking
+  status    QuestStatus @default(ACTIVE)
+  startedAt DateTime    @default(now())
+  completedAt DateTime?
+  
+  @@unique([userId, questId])
+}
+
+// Enhanced Feature Models
+model Comment {
+  id              Int      @id @default(autoincrement())
+  createdAt       DateTime @default(now())
+  dreamId         Int
+  dream           Dream    @relation(fields: [dreamId], references: [id], onDelete: Cascade)
+  userId          Int
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  content         String   @db.Text
+  parentCommentId Int?
+  parentComment   Comment? @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies         Comment[] @relation("CommentReplies")
+}
+
+model Notification {
+  id        Int              @id @default(autoincrement())
+  createdAt DateTime         @default(now())
+  userId    Int
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  type      NotificationType
+  message   String           @db.Text
+  isRead    Boolean          @default(false)
+  metadata  Json?            // Additional context data
+}
+
+model Message {
+  id         Int      @id @default(autoincrement())
+  createdAt  DateTime @default(now())
+  senderId   Int
+  sender     User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiverId Int?
+  receiver   User?    @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  
+  content    String   @db.Text
+  circleId   Int?     // If sent in a circle context
+  isRead     Boolean  @default(false)
+}
+
+model UserProfile {
+  id                    Int     @id @default(autoincrement())
+  userId                Int     @unique
+  user                  User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Preferences
+  preferredWakeTime     String? // HH:MM format
+  sleepPatternData      Json?
+  reportThemePreferences Json?  // {colorPalette, logoUrl, fontChoice}
+  selectedThemeId       String?
+  customThemePreferences Json?
+  
+  // Wellness integrations
+  externalIntegrations  Json?   // {platform: {token, lastSync}}
+}
+
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  createdAt  DateTime @default(now())
+  userId     Int?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  actionType String   // 'create', 'update', 'delete', 'export', 'login'
+  entityType String   // 'dream', 'ritual', 'order', 'user'
+  entityId   Int?
+  oldValue   Json?
+  newValue   Json?
+  ipAddress  String?
+  userAgent  String?
+}

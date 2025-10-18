@@ -2,7 +2,6 @@
 
 set -e
 cd `dirname $0`
-cd .. # .codapt
-cd .. # project root
+cd ..
 
-scripts/docker-compose down --remove-orphans
+.codapt/scripts/stop

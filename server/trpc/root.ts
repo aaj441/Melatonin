@@ -47,6 +47,7 @@ import { markNotificationRead } from "~/server/trpc/procedures/markNotificationR
 import { exportDreams } from "~/server/trpc/procedures/exportDreams";
 import { exportRituals } from "~/server/trpc/procedures/exportRituals";
 import { exportAchievements } from "~/server/trpc/procedures/exportAchievements";
+import { interpretDream } from "~/server/trpc/procedures/interpretDream";
 
 export const appRouter = createTRPCRouter({
   getMinioBaseUrl,
@@ -90,6 +91,7 @@ export const appRouter = createTRPCRouter({
   getDreamComments,
   // Voice & AI
   transcribeAudio,
+  interpretDream,
   // User Preferences & Personalization
   getUserPreferences,
   updateUserPreferences,

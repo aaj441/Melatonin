@@ -238,6 +238,14 @@ function Home() {
               <NotificationBell userId={userId} />
               
               <Link
+                to="/interpret"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg transition-all text-cosmic-purple hover:text-ethereal-purple hover:bg-cosmic-navy/30"
+              >
+                <Sparkles size={18} />
+                <span className="hidden sm:inline">Interpret</span>
+              </Link>
+
+              <Link
                 to="/rituals"
                 className="flex items-center gap-2 px-4 py-2 rounded-lg transition-all text-cosmic-purple hover:text-ethereal-purple hover:bg-cosmic-navy/30"
               >

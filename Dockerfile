@@ -1,37 +1,26 @@
-FROM debian:12
+FROM node:18-alpine
 
 WORKDIR /app
 
-# Install system dependencies
-RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install --yes curl wget && \
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash && \
-    DEBIAN_FRONTEND=noninteractive apt-get install --yes nodejs && \
-    DEBIAN_FRONTEND=noninteractive apt-get install --yes wget build-essential libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev vim less iputils-ping sudo libsecret-1-0 command-not-found rsync man-db netcat-openbsd dnsutils procps lsof tini && \
-    DEBIAN_FRONTEND=noninteractive apt-get update
-
-# Install pnpm
-RUN npm install -g pnpm
-RUN pnpm set store-dir /app/node_modules/.pnpm-store
-
 # Copy package files
-COPY package.json pnpm-lock.yaml ./
+COPY package*.json ./
+COPY pnpm-lock.yaml ./
 
-# Install dependencies
+# Install pnpm and dependencies
+RUN npm install -g pnpm
 RUN pnpm install --frozen-lockfile
 
 # Copy source code
 COPY . .
 
-# Generate Prisma client and build the application
-RUN pnpm exec prisma generate
-RUN pnpm run build
+# Generate Prisma client
+RUN npx prisma generate
 
-# Make startup script executable
-RUN chmod +x start.sh
+# Build the application
+RUN npm run build
 
-# Expose port (Railway will set PORT environment variable)
+# Expose port
 EXPOSE 3000
 
 # Start the application
-CMD ["./start.sh"]
+CMD ["npm", "run", "start"]

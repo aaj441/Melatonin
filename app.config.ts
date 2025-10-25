@@ -3,7 +3,7 @@ import reactRefresh from "@vitejs/plugin-react";
 import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
 import tsConfigPaths from "vite-tsconfig-paths";
 import { config } from "vinxi/plugins/config";
-import { env } from "./src/server/env";
+import { env } from "./server/env";
 import { nodePolyfills } from "vite-plugin-node-polyfills";
 import { consoleForwardPlugin } from "./vite-console-forward-plugin";
 
@@ -25,7 +25,7 @@ export default createApp({
       type: "http",
       name: "trpc",
       base: "/trpc",
-      handler: "./src/server/trpc/handler.ts",
+      handler: "./server/trpc/handler.ts",
       target: "server",
       plugins: () => [
         config("allowedHosts", {
@@ -45,7 +45,7 @@ export default createApp({
       type: "http",
       name: "debug",
       base: "/api/debug/client-logs",
-      handler: "./src/server/debug/client-logs-handler.ts",
+      handler: "./server/debug/client-logs-handler.ts",
       target: "server",
       plugins: () => [
         config("allowedHosts", {

@@ -1,13 +1,12 @@
 [build]
-builder = "dockerfile"
-dockerfilePath = "Dockerfile"
+builder = "nixpacks"
 
 [deploy]
-startCommand = "pnpm start"
+startCommand = "npm run start"
 healthcheckPath = "/"
 healthcheckTimeout = 100
 restartPolicyType = "on_failure"
-restartPolicyMaxRetries = 10
 
 [env]
 NODE_ENV = "production"
+PORT = "3000"
